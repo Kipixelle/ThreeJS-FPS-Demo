@@ -236,7 +236,7 @@ function init(){
 
     // Load HDR environment
     const rgbeLoader = new HDRLoader();
-    rgbeLoader.setPath('/probes/');
+    rgbeLoader.setPath('./probes/');
     rgbeLoader.load('generate_probe_52.hdr', function (texture, textureData) {
         texture.mapping = THREE.EquirectangularReflectionMapping;
         // Apply it both as environment and background
@@ -308,7 +308,7 @@ function init(){
     // --- GLTF ---
     const loader = new GLTFLoader();
 
-    loader.load( '/garage/garage.gltf', function ( gltf ) {
+    loader.load( './garage/garage.gltf', function ( gltf ) {
         const mesh = gltf.scene;
         mesh.traverse ( function ( child )
         {
