@@ -7,9 +7,14 @@ import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { SSAOPass } from 'three/addons/postprocessing/SSAOPass.js';
+// import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+// import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+// import { FXAAPass } from 'three/addons/postprocessing/EffectPa.js';
+import { FXAAPass } from 'three/addons/postprocessing/FXAAPass.js';
+// import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
-let camera, scene, renderer, composer, stats;
+let camera, scene, renderer, composer, stats //, finalComposer, bloomComposer;
 let clock = new THREE.Clock();
 
 let flashlight, flashlightHelper;
@@ -184,16 +189,16 @@ function createSpotlight(position, target){
 }
 
 function createFlashlight(){
-    flashlight = new THREE.SpotLight( 0xffffff, 5 );
+    flashlight = new THREE.SpotLight( 0xffffff, 50 );
     flashlight.castShadow = true;
     flashlight.shadow.mapSize.width = 1024;
     flashlight.shadow.mapSize.height = 1024;
     flashlight.shadow.camera.near = 0.1;
     flashlight.shadow.camera.far = 20;
     flashlight.distance = 40;
-    flashlight.decay = 1;
+    flashlight.decay = 1.2;
     flashlight.angle = Math.PI/8;
-    flashlight.penumbra = 0.1;
+    flashlight.penumbra = 0.3;
 
     camera.add( flashlight );
     flashlight.position.set( 0, 0, 1);
@@ -264,19 +269,55 @@ function init(){
     createCameraPath()
 
     // --- Post Process ---
-    composer = new EffectComposer(renderer);
     const renderPass = new RenderPass(scene, camera);
-    composer.addPass(renderPass);
 
     // SSAO
     const ssaoPass = new SSAOPass(scene, camera, window.innerWidth, window.innerHeight);
     ssaoPass.kernelRadius = 5;      // Taille du rayon d'occlusion
     ssaoPass.minDistance = 0.0001;   // Distance minimale de calcul
     ssaoPass.maxDistance = 0.1;     // Distance maximale
-    composer.addPass(ssaoPass);
+    
+    const fxaaPass = new FXAAPass();
 
     const outputPass = new OutputPass();
-    composer.addPass( outputPass );
+
+    composer = new EffectComposer(renderer);
+    composer.addPass(renderPass);
+    composer.addPass(ssaoPass);
+    composer.addPass(outputPass);
+    fxaaPass.enabled = true;
+    composer.addPass(fxaaPass);
+
+    // Bloom
+    // const bloomPass = new UnrealBloomPass( new THREE.Vector2( window.innerWidth, window.innerHeight ), 1.0, 0.4, 1 );
+    // bloomPass.threshold = params.threshold;
+    // bloomPass.strength = params.strength;
+    // bloomPass.radius = params.radius;
+
+    // bloomComposer = new EffectComposer( renderer );
+    // bloomComposer.renderToScreen = false;
+    // bloomComposer.addPass( renderScene );
+    // bloomComposer.addPass( bloomPass );
+
+    // const mixPass = new ShaderPass(
+    //     new THREE.ShaderMaterial( {
+    //         uniforms: {
+    //             baseTexture: { value: null },
+    //             bloomTexture: { value: bloomComposer.renderTarget2.texture }
+    //         },
+    //         vertexShader: document.getElementById( 'vertexshader' ).textContent,
+    //         fragmentShader: document.getElementById( 'fragmentshader' ).textContent,
+    //         defines: {}
+    //     } ), 'baseTexture'
+    // );
+    // mixPass.needsSwap = true;
+
+    // finalComposer = new EffectComposer( renderer );
+    // finalComposer.addPass( renderScene );
+    // finalComposer.addPass( ssaoPass );
+    // finalComposer.addPass( mixPass );
+    // finalComposer.addPass( outputPass );
+    // finalComposer.addPass( fxaaPass );
 
     // --- GUI ---
     const params = {
@@ -350,6 +391,8 @@ function render() {
 
     stats.update();
 
+    // bloomComposer.render();
+    // finalComposer.render(delta);
     composer.render(delta);
 
     requestAnimationFrame( render );
