@@ -266,7 +266,7 @@ function init(){
     // --- Light ---
     const posA = new THREE.Vector3(1, 4.3, -1.8)
     const targetA = new THREE.Vector3(-1, 0, -1.8)
-    // createSpotlight(posA, targetA);
+    createSpotlight(posA, targetA);
     // const posB = new THREE.Vector3(1, 4.3, 4)
     // const targetB = new THREE.Vector3(-1, 0, 5)
     // createSpotlight(posB, targetB);
