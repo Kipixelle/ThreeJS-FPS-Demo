@@ -7,14 +7,13 @@ import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { SSAOPass } from 'three/addons/postprocessing/SSAOPass.js';
-// import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-// import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
-// import { FXAAPass } from 'three/addons/postprocessing/EffectPa.js';
+import { SAOPass } from 'three/addons/postprocessing/SAOPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { FXAAPass } from 'three/addons/postprocessing/FXAAPass.js';
 // import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
-let camera, scene, renderer, composer, stats //, finalComposer, bloomComposer;
+let camera, scene, renderer, composer, stats, bloomPass;
 let clock = new THREE.Clock();
 
 let flashlight, flashlightHelper;
@@ -200,6 +199,8 @@ function createFlashlight(){
     flashlight.angle = Math.PI/8;
     flashlight.penumbra = 0.3;
 
+    flashlight.bias = 0.0001;
+
     camera.add( flashlight );
     flashlight.position.set( 0, 0, 1);
     scene.add( camera );
@@ -214,8 +215,18 @@ function createFlashlight(){
 function init(){
     const container = document.getElementById( 'container' );
 
+    const params = {
+        flashlightActive : true,
+        flashlightHelperActive: true,
+        threshold: 1.0,
+        strength: 0.15,
+        radius: 0,
+        exposure: 1.0
+    }
+
     // --- Renderer ---
     renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.precision = "highp";
     renderer.physicallyCorrectLights = true;     // PBR enabled
     renderer.outputEncoding = THREE.sRGBEncoding; // PBR RGB workflow
 
@@ -226,7 +237,8 @@ function init(){
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.2;          // Global contrast
+    // renderer.toneMapping = THREE.NeutralToneMapping;
+    renderer.toneMappingExposure = 1.0;          // Global contrast
 
 
 
@@ -242,11 +254,11 @@ function init(){
     // Load HDR environment
     const rgbeLoader = new HDRLoader();
     rgbeLoader.setPath('./probes/');
-    rgbeLoader.load('generate_probe_52.hdr', function (texture, textureData) {
+    rgbeLoader.load('garage_blender.hdr', function (texture, textureData) {
         texture.mapping = THREE.EquirectangularReflectionMapping;
         // Apply it both as environment and background
         scene.environment = texture;
-        scene.background = new THREE.Color(0x00CCFF);
+        scene.background = new THREE.Color(0x0000);
     });
 
     console.log('HDR loaded!');
@@ -254,7 +266,7 @@ function init(){
     // --- Light ---
     const posA = new THREE.Vector3(1, 4.3, -1.8)
     const targetA = new THREE.Vector3(-1, 0, -1.8)
-    createSpotlight(posA, targetA);
+    // createSpotlight(posA, targetA);
     // const posB = new THREE.Vector3(1, 4.3, 4)
     // const targetB = new THREE.Vector3(-1, 0, 5)
     // createSpotlight(posB, targetB);
@@ -276,54 +288,38 @@ function init(){
     ssaoPass.kernelRadius = 5;      // Taille du rayon d'occlusion
     ssaoPass.minDistance = 0.0001;   // Distance minimale de calcul
     ssaoPass.maxDistance = 0.1;     // Distance maximale
-    
+
+    const saoPass = new SAOPass( scene, camera );
+    saoPass.params.saoBias = -1;
+    saoPass.params.saoIntensity = 0.01;
+    saoPass.params.saoScale = 10;
+    saoPass.params.saoKernelRadiux = 62;
+    saoPass.params.saoMinResolution = 0;
+    saoPass.params.saoBlur = true;
+    saoPass.params.saoBlurRadius = 5.8;
+    saoPass.params.saoBlurStdDev = 2;
+    saoPass.params.saoBlurDepthCutoff = 0.0001;
+
     const fxaaPass = new FXAAPass();
 
     const outputPass = new OutputPass();
 
+    // Bloom
+    bloomPass = new UnrealBloomPass( new THREE.Vector2( window.innerWidth, window.innerHeight ), 0.15, 0, 1.0);
+    bloomPass.strength = params.strength;
+    bloomPass.radius = params.radius;
+    bloomPass.threshold = params.threshold;
+
     composer = new EffectComposer(renderer);
     composer.addPass(renderPass);
+    composer.addPass(bloomPass);
     composer.addPass(ssaoPass);
+    composer.addPass(saoPass);
     composer.addPass(outputPass);
     fxaaPass.enabled = true;
     composer.addPass(fxaaPass);
 
-    // Bloom
-    // const bloomPass = new UnrealBloomPass( new THREE.Vector2( window.innerWidth, window.innerHeight ), 1.0, 0.4, 1 );
-    // bloomPass.threshold = params.threshold;
-    // bloomPass.strength = params.strength;
-    // bloomPass.radius = params.radius;
-
-    // bloomComposer = new EffectComposer( renderer );
-    // bloomComposer.renderToScreen = false;
-    // bloomComposer.addPass( renderScene );
-    // bloomComposer.addPass( bloomPass );
-
-    // const mixPass = new ShaderPass(
-    //     new THREE.ShaderMaterial( {
-    //         uniforms: {
-    //             baseTexture: { value: null },
-    //             bloomTexture: { value: bloomComposer.renderTarget2.texture }
-    //         },
-    //         vertexShader: document.getElementById( 'vertexshader' ).textContent,
-    //         fragmentShader: document.getElementById( 'fragmentshader' ).textContent,
-    //         defines: {}
-    //     } ), 'baseTexture'
-    // );
-    // mixPass.needsSwap = true;
-
-    // finalComposer = new EffectComposer( renderer );
-    // finalComposer.addPass( renderScene );
-    // finalComposer.addPass( ssaoPass );
-    // finalComposer.addPass( mixPass );
-    // finalComposer.addPass( outputPass );
-    // finalComposer.addPass( fxaaPass );
-
     // --- GUI ---
-    const params = {
-        flashlightActive : true,
-        flashlightHelperActive: true
-    }
     const gui = new GUI();
 
     const ssaoFolder = gui.addFolder('SSAO');
@@ -341,10 +337,48 @@ function init(){
     ssaoFolder.add( ssaoPass, 'maxDistance' ).min( 0.01 ).max( 0.3 );
     ssaoFolder.add( ssaoPass, 'enabled' );
     ssaoFolder.close();
+
+    const saoFolder = gui.addFolder('SAO');
+    saoFolder.add( saoPass.params, 'output', {
+        'Default': SAOPass.OUTPUT.Default,
+        'SAO Only': SAOPass.OUTPUT.SAO,
+        'Normal': SAOPass.OUTPUT.Normal
+    } ).onChange( function ( value ) {
+        saoPass.params.output = value;
+    } );
+    saoFolder.add( saoPass.params, 'saoBias', - 1, 1 );
+    saoFolder.add( saoPass.params, 'saoIntensity', 0, 1 );
+    saoFolder.add( saoPass.params, 'saoScale', 0, 10 );
+    saoFolder.add( saoPass.params, 'saoKernelRadius', 1, 100 );
+    saoFolder.add( saoPass.params, 'saoMinResolution', 0, 1 );
+    saoFolder.add( saoPass.params, 'saoBlur' );
+    saoFolder.add( saoPass.params, 'saoBlurRadius', 0, 200 );
+    saoFolder.add( saoPass.params, 'saoBlurStdDev', 0.5, 150 );
+    saoFolder.add( saoPass.params, 'saoBlurDepthCutoff', 0.0, 0.1 );
+    saoFolder.add( saoPass, 'enabled' );
+
+
     const lightFolder = gui.addFolder('Flashlight');
     lightFolder.add( params, 'flashlightActive' ).onChange(function(){flashlight.visible = params.flashlightActive});
     lightFolder.add( params, 'flashlightHelperActive' ).onChange(function(){flashlightHelper.visible = params.flashlightHelperActive});
     lightFolder.open();
+
+    const bloomFolder = gui.addFolder( 'bloom' );
+    bloomFolder.add( params, 'threshold', 0.0, 50.0 ).onChange( function ( value ) {
+        bloomPass.threshold = Number( value );
+    } );
+    bloomFolder.add( params, 'strength', 0.0, 3.0 ).onChange( function ( value ) {
+        bloomPass.strength = Number( value );
+    } );
+    gui.add( params, 'radius', 0.0, 1.0 ).step( 0.01 ).onChange( function ( value ) {
+        bloomPass.radius = Number( value );
+    } );
+
+    const toneMappingFolder = gui.addFolder( 'tone mapping' );
+    toneMappingFolder.add( params, 'exposure', 0.1, 2 ).onChange( function ( value ) {
+        renderer.toneMappingExposure = Math.pow( value, 4.0 );
+    } );
+
 
     // --- GLTF ---
     const loader = new GLTFLoader();
@@ -391,8 +425,6 @@ function render() {
 
     stats.update();
 
-    // bloomComposer.render();
-    // finalComposer.render(delta);
     composer.render(delta);
 
     requestAnimationFrame( render );
