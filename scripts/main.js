@@ -195,11 +195,9 @@ function createFlashlight(){
     flashlight.shadow.camera.near = 0.1;
     flashlight.shadow.camera.far = 20;
     flashlight.distance = 40;
-    flashlight.decay = 1.2;
+    flashlight.decay = 1.15;
     flashlight.angle = Math.PI/8;
     flashlight.penumbra = 0.3;
-
-    flashlight.bias = 0.0001;
 
     camera.add( flashlight );
     flashlight.position.set( 0, 0, 1);
@@ -285,13 +283,13 @@ function init(){
 
     // SSAO
     const ssaoPass = new SSAOPass(scene, camera, window.innerWidth, window.innerHeight);
-    ssaoPass.kernelRadius = 5;      // Taille du rayon d'occlusion
+    ssaoPass.kernelRadius = 6;      // Taille du rayon d'occlusion
     ssaoPass.minDistance = 0.0001;   // Distance minimale de calcul
     ssaoPass.maxDistance = 0.1;     // Distance maximale
 
     const saoPass = new SAOPass( scene, camera );
     saoPass.params.saoBias = -1;
-    saoPass.params.saoIntensity = 0.01;
+    saoPass.params.saoIntensity = 0.009;
     saoPass.params.saoScale = 10;
     saoPass.params.saoKernelRadiux = 62;
     saoPass.params.saoMinResolution = 0;
@@ -348,7 +346,7 @@ function init(){
     } );
     saoFolder.add( saoPass.params, 'saoBias', - 1, 1 );
     saoFolder.add( saoPass.params, 'saoIntensity', 0, 1 );
-    saoFolder.add( saoPass.params, 'saoScale', 0, 10 );
+    saoFolder.add( saoPass.params, 'saoScale', 0, 30 );
     saoFolder.add( saoPass.params, 'saoKernelRadius', 1, 100 );
     saoFolder.add( saoPass.params, 'saoMinResolution', 0, 1 );
     saoFolder.add( saoPass.params, 'saoBlur' );
