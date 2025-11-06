@@ -1,11 +1,20 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <title>Garage flashlight</title>
+    <title>Flashlight FPS</title>
+    <link href="styles/main.css" rel="stylesheet">
+    <style>
+      body { margin: 0; }
+    </style>
   </head>
   <body>
+    <div class="close"></div>
     <div id="container"></div>
+    <div class="progress-bar-container">
+      <label for="progress-bar">Loading...</label>
+      <progress id="progress-bar" value="0" max="100"></progress>
+    </div>
     <script type="module" src="scripts/main.js"></script>
   </body>
 </html>

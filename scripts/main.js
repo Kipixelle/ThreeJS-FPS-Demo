@@ -1,23 +1,33 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import Stats from 'three/addons/libs/stats.module.js';
 
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
+
+import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { SSAOPass } from 'three/addons/postprocessing/SSAOPass.js';
 import { SAOPass } from 'three/addons/postprocessing/SAOPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { FXAAPass } from 'three/addons/postprocessing/FXAAPass.js';
-// import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
-let camera, scene, renderer, composer, stats, bloomPass;
-let clock = new THREE.Clock();
-
+// -- Scene and objects --
+let stats;
+let scene, camera;
 let flashlight, flashlightHelper;
 
+let gltfModel;
+let gltfIsLoading = false;
+let loadingManager = new THREE.LoadingManager();
+
+// -- Post process and renderer --
+let composer, bloomPass;
+let renderer;
+
+// -- Camera var --
 let moveForward = false;
 let moveBackward = false;
 let moveLeft = false;
@@ -33,6 +43,14 @@ let yaw = 0;
 const sensitivity = 0.002;
 const speed = 6.0;
 
+// -- Mouse and control --
+let closeEl = initCloseBtn();
+let clock = new THREE.Clock();
+
+document.addEventListener( 'mousedown', onDocumentMouseDown, false );
+
+// -- Zones system --
+let useZones = false;
 let zones = [];
 let zonesHelper = [];
 const zoneInHelperMat = new THREE.LineBasicMaterial({
@@ -54,7 +72,7 @@ function initMouseAndKeyboardForFPSCamera(container){
 
     // Mouse look
     document.body.addEventListener('mousemove', (event) => {
-        if (document.pointerLockElement === document.body){
+        if (document.pointerLockElement === document.body && !gltfIsLoading){
             yaw -= event.movementX * sensitivity;
             pitch -= event.movementY * sensitivity;
             pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
@@ -176,6 +194,7 @@ function createSpotlight(position, target){
     spotLight.shadow.camera.near = 1;
     spotLight.shadow.camera.far = 10;
     spotLight.shadow.focus = 1;
+    // spotLight.shadow.bias = 1;
 
     spotLight.target.position.set(target.x, target.y, target.z)
     spotLight.position.set(position.x, position.y, position.z)
@@ -194,6 +213,7 @@ function createFlashlight(){
     flashlight.shadow.mapSize.height = 1024;
     flashlight.shadow.camera.near = 0.1;
     flashlight.shadow.camera.far = 20;
+    // flashlight.shadow.bias = 1;
     flashlight.distance = 40;
     flashlight.decay = 1.15;
     flashlight.angle = Math.PI/8;
@@ -206,51 +226,96 @@ function createFlashlight(){
     flashlight.target.position.add(new THREE.Vector3(0, 0, 1));
 
     flashlightHelper = new THREE.SpotLightHelper( flashlight );
+    flashlightHelper.visible = false;
     scene.add( flashlightHelper );
 }
 
+function loadScene(gltfName){
+    const progressBarContainer = document.querySelector('.progress-bar-container');
+    const progressBar = document.getElementById('progress-bar');
 
-function init(){
+    const loader = new GLTFLoader(loadingManager);
+
+    if (gltfModel != null){
+        gltfModel.removeFromParent();
+        // scene.remove(gltfModel);
+        gltfModel = null;
+    }
+
+    gltfIsLoading = true;
+    progressBar.value = 0;
+    progressBarContainer.style.visibility = 'visible';
+
+    loader.load( gltfName, async function ( gltf ) {
+        gltfModel = gltf.scene
+        gltfModel.traverse ( function ( child )
+        {
+            if ( child.isMesh )
+            {
+                child.castShadow = true;
+                child.receiveShadow = true;
+                child.material.side = 0;
+            }
+        });
+
+        await renderer.compileAsync( gltfModel, camera, scene );
+
+        scene.add( gltfModel );
+
+        gltfIsLoading = false;
+        progressBarContainer.style.visibility = 'hidden';
+
+    }, undefined, function ( error ) {
+        console.error( error );
+    });
+}
+
+function init() {
     const container = document.getElementById( 'container' );
 
     const params = {
         flashlightActive : true,
-        flashlightHelperActive: true,
-        threshold: 1.0,
-        strength: 0.15,
-        radius: 0,
-        exposure: 1.0
+        flashlightHelperActive: false,
+        exposure: 1.0,
+        modelName : "Garage",
+        useZones: false
     }
 
     // --- Renderer ---
-    renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.precision = "highp";
+    renderer = new THREE.WebGLRenderer();
     renderer.physicallyCorrectLights = true;     // PBR enabled
     renderer.outputEncoding = THREE.sRGBEncoding; // PBR RGB workflow
-
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    container.appendChild( renderer.domElement );
+    
+    // renderer.setPixelRatio( window.devicePixelRatio );
+    renderer.setSize( window.innerWidth, window.innerHeight );
 
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    // renderer.toneMapping = THREE.NeutralToneMapping;
-    renderer.toneMappingExposure = 1.0;          // Global contrast
+    renderer.toneMappingExposure = 1;
 
+    container.appendChild( renderer.domElement );
 
+    // Show fps
+    stats = new Stats();
+    container.appendChild( stats.dom );
+
+    // --- Scene ---
+    scene = new THREE.Scene();
 
     // --- Camera ---
     camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
     camera.position.set(1, 1, 1);
 
-    initMouseAndKeyboardForFPSCamera(container);
+    // -- Loader manager--
+    const progressBar = document.getElementById('progress-bar');
+    loadingManager.onProgress = function (url, loaded, total) {
+        progressBar.value = (loaded / total) * 100;
+    };
 
-    // --- Scene ---
-    scene = new THREE.Scene();
-
-    // Load HDR environment
-    const rgbeLoader = new HDRLoader();
+    // -- HDR --
+    const rgbeLoader = new HDRLoader(loadingManager);
     rgbeLoader.setPath('./probes/');
     rgbeLoader.load('garage_blender.hdr', function (texture, textureData) {
         texture.mapping = THREE.EquirectangularReflectionMapping;
@@ -261,22 +326,25 @@ function init(){
 
     console.log('HDR loaded!');
 
+    // -- GLTF --
+    loadScene('garage/garage.gltf');
+
+    // -- init mouse / keyboard controls --
+    initMouseAndKeyboardForFPSCamera(container);
+
+    // --- Camera zone ---
+    createCameraPath()
+
     // --- Light ---
     const posA = new THREE.Vector3(1, 4.3, -1.8)
     const targetA = new THREE.Vector3(-1, 0, -1.8)
     createSpotlight(posA, targetA);
-    // const posB = new THREE.Vector3(1, 4.3, 4)
-    // const targetB = new THREE.Vector3(-1, 0, 5)
-    // createSpotlight(posB, targetB);
-
-    createFlashlight()
 
     const pointLight1 = new THREE.PointLight( 0xffffff, 0.1, 8, 0 );
     pointLight1.position.set( 0, 0.1, 2 );
     scene.add( pointLight1 );
 
-    // --- Camera zone ---
-    createCameraPath()
+    createFlashlight()
 
     // --- Post Process ---
     const renderPass = new RenderPass(scene, camera);
@@ -304,9 +372,9 @@ function init(){
 
     // Bloom
     bloomPass = new UnrealBloomPass( new THREE.Vector2( window.innerWidth, window.innerHeight ), 0.15, 0, 1.0);
-    bloomPass.strength = params.strength;
-    bloomPass.radius = params.radius;
-    bloomPass.threshold = params.threshold;
+    bloomPass.strength = 0.15;
+    bloomPass.radius = 0.0;
+    bloomPass.threshold = 1.0;
 
     composer = new EffectComposer(renderer);
     composer.addPass(renderPass);
@@ -314,7 +382,6 @@ function init(){
     composer.addPass(ssaoPass);
     composer.addPass(saoPass);
     composer.addPass(outputPass);
-    fxaaPass.enabled = true;
     composer.addPass(fxaaPass);
 
     // --- GUI ---
@@ -354,71 +421,64 @@ function init(){
     saoFolder.add( saoPass.params, 'saoBlurStdDev', 0.5, 150 );
     saoFolder.add( saoPass.params, 'saoBlurDepthCutoff', 0.0, 0.1 );
     saoFolder.add( saoPass, 'enabled' );
+    saoFolder.close();
 
+    const bloomFolder = gui.addFolder( 'Bloom' );
+    bloomFolder.add( bloomPass, 'threshold', 0.0, 50.0 );
+    bloomFolder.add( bloomPass, 'strength', 0.0, 3.0 );
+    bloomFolder.add( bloomPass, 'radius', 0.0, 1.0 ).step( 0.01 );
+    bloomFolder.close();
+
+    const toneMappingFolder = gui.addFolder( 'Tone mapping' );
+    toneMappingFolder.add( params, 'exposure', 0.1, 2 ).onChange( function ( value ) {
+        renderer.toneMappingExposure = Math.pow( value, 4.0 );
+    } );
+    toneMappingFolder.close();
 
     const lightFolder = gui.addFolder('Flashlight');
     lightFolder.add( params, 'flashlightActive' ).onChange(function(){flashlight.visible = params.flashlightActive});
     lightFolder.add( params, 'flashlightHelperActive' ).onChange(function(){flashlightHelper.visible = params.flashlightHelperActive});
     lightFolder.open();
 
-    const bloomFolder = gui.addFolder( 'bloom' );
-    bloomFolder.add( params, 'threshold', 0.0, 50.0 ).onChange( function ( value ) {
-        bloomPass.threshold = Number( value );
+    const sceneFolder = gui.addFolder('Scene');
+    sceneFolder.add(params, 'modelName', ["Garage", "Basement"]).onChange( function ( value ) {
+        console.log(value);
+        if (value == "Garage"){
+            loadScene('./garage/garage.gltf');
+        } else if(value == "Basement"){
+            loadScene('./basement/basement.gltf');
+        }
     } );
-    bloomFolder.add( params, 'strength', 0.0, 3.0 ).onChange( function ( value ) {
-        bloomPass.strength = Number( value );
-    } );
-    gui.add( params, 'radius', 0.0, 1.0 ).step( 0.01 ).onChange( function ( value ) {
-        bloomPass.radius = Number( value );
-    } );
-
-    const toneMappingFolder = gui.addFolder( 'tone mapping' );
-    toneMappingFolder.add( params, 'exposure', 0.1, 2 ).onChange( function ( value ) {
-        renderer.toneMappingExposure = Math.pow( value, 4.0 );
-    } );
-
-
-    // --- GLTF ---
-    const loader = new GLTFLoader();
-
-    loader.load( './garage/garage.gltf', function ( gltf ) {
-        const mesh = gltf.scene;
-        mesh.traverse ( function ( child )
-        {
-            if ( child.isMesh )
-            {
-                child.castShadow = true;
-                child.receiveShadow = true;
-            }
-        });
-        scene.add( mesh );
-
-    }, undefined, function ( error ) {
-        console.error( error );
+    sceneFolder.add(params, 'useZones').onChange( function (){
+        useZones = params.useZones;
     });
 
-    // Show fps
-    stats = new Stats();
-    container.appendChild( stats.domElement );
-
-    window.addEventListener('resize', onWindowResize);
 }
 
-function onWindowResize(){
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    composer.setSize(window.innerWidth, window.innerHeight);
+function initCloseBtn() {
+    let closeEl = document.querySelector(".close");
+    if (closeEl) {
+        closeEl.addEventListener('click', function() {
+            window.close();
+        });
+    };
+    return closeEl;
+}
+
+function onDocumentMouseDown(event) {
+    if (event.target == closeEl) return; // it should deliver click to close button
 }
 
 function render() {
     const delta = clock.getDelta();
 
-    let newCameraPos = getNewCameraPos(delta)
-    if (cameraInZone(newCameraPos)){
+    // if (!gltfIsLoading){
+    let newCameraPos = getNewCameraPos(delta);
+    if (!useZones || (useZones && cameraInZone(newCameraPos))){
         camera.position.set(newCameraPos.x, newCameraPos.y, newCameraPos.z);
     }
-
+    // }
+    
     flashlightHelper.update(delta)
 
     stats.update();
@@ -426,7 +486,6 @@ function render() {
     composer.render(delta);
 
     requestAnimationFrame( render );
-    // renderer.render(scene, camera);
+    // renderer.render( scene, camera );
 }
-  
 
