@@ -1,7 +1,9 @@
 {
   "name": "threejs-fps-demo",
+  "main": "index.html",
   "scripts": {
     "dev": "vite",
+    "build_github": "vite build --config github_config.js",
     "build": "vite build",
     "preview": "vite preview"
   },
