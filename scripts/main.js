@@ -15,53 +15,52 @@ import { FXAAPass } from 'three/addons/postprocessing/FXAAPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 // -- Scene and objects --
-let stats;
-let scene, camera;
-let flashlight, flashlightHelper;
+let stats;                        // Display FPS on the screen
+let scene, camera;                // Scene and camera
+let flashlight, flashlightHelper; // Spotlight for the flashlight and its helper
 
-let gltfModel;
-let gltfIsLoading = false;
-let loadingManager = new THREE.LoadingManager();
+let gltfModel;                                   // GLTF model of the scene
+let flashlightModel;                             // GLTF model for the flashlight
+let gltfIsLoading = false;                       // Boolean to determine if some GLTF are loading or not
+let loadingManager = new THREE.LoadingManager(); // Loading manager for the gltfLoader and rgbeLoader
+let gltfLoader = new GLTFLoader(loadingManager); // Loader for the GLTF use in the app
+let rgbeLoader = new HDRLoader(loadingManager);  // Loader for the HDR use in the app
 
 // -- Post process and renderer --
-let composer, bloomPass;
-let renderer;
+let composer, bloomPass; // Composer for the post process, BloomPass
+let renderer;            // Renderer
 
-// -- Camera var --
-let moveForward = false;
-let moveBackward = false;
-let moveLeft = false;
-let moveRight = false;
-let moveUp = false;
-let moveDown = false;
+// -- FPS Camera control --
+let moveForward = false;  // Key W
+let moveBackward = false; // Key S
+let moveLeft = false;     // Key Q
+let moveRight = false;    // Key D
+let moveUp = false;       // Key Space
+let moveDown = false;     // Key Shift
 
-const velocity = new THREE.Vector3();
-const direction = new THREE.Vector3();
+const velocity = new THREE.Vector3();  // FPS camera velocity
+const direction = new THREE.Vector3(); // FPS camera direction
 
-let pitch = 0;
-let yaw = 0;
-const sensitivity = 0.002;
-const speed = 6.0;
+let pitch = 0;              // FPS camera pitch
+let yaw = 0;                // FPS camera yaw
+const sensitivity = 0.002;  // FPS camera sensitivity
+const speed = 6.0;          // FPS camera speed
 
 // -- Mouse and control --
-let closeEl = initCloseBtn();
+let closeEl = initCloseBtn(); // Close button HTML element
+document.addEventListener( 'mousedown', onDocumentMouseDown, false ); // Function to close the app (even without the frame buttons) when launch with NW.js as an exe
+
 let clock = new THREE.Clock();
 
-document.addEventListener( 'mousedown', onDocumentMouseDown, false );
+// -- Areas movement system --
+let useAreas = false; // Bolean to define if use areas constraint to move the FPS camera
+let areasMovement = [];       // Array to store the THREE.Box2 representing areas restricting movement for FPS camera
+let areasMovementHelper = []; // Array to store the THREE.Line to display helpers for areas
+const areaInHelperMat = new THREE.LineBasicMaterial({color: 0x32a852});  // Color of area helper when camera in (green)
+const areaOutHelperMat = new THREE.LineBasicMaterial({color: 0xa33e33}); // Color of area helper when camera out (red)
 
-// -- Zones system --
-let useZones = false;
-let zones = [];
-let zonesHelper = [];
-const zoneInHelperMat = new THREE.LineBasicMaterial({
-    color: 0x32a852
-});
-const zoneOutHelperMat = new THREE.LineBasicMaterial({
-    color: 0xa33e33
-});
-
-init();
-render();
+init();   // Init the app
+render(); // Render the app
 
 // --- Camera FPS functions ---
 function initMouseAndKeyboardForFPSCamera(container){
@@ -85,35 +84,37 @@ function initMouseAndKeyboardForFPSCamera(container){
 }
 
 function onKeyDown(event) {
-  switch (event.code) {
-    case 'KeyW': moveForward = true; break;
-    case 'KeyS': moveBackward = true; break;
-    case 'KeyA': moveLeft = true; break;
-    case 'KeyD': moveRight = true; break;
-    case 'Space': moveUp = true; break;
-    case 'ShiftLeft': moveDown = true; break;
-  }
+    // Set FPS camera control when key down (do movement)
+    switch (event.code) {
+        case 'KeyW': moveForward = true; break;
+        case 'KeyS': moveBackward = true; break;
+        case 'KeyA': moveLeft = true; break;
+        case 'KeyD': moveRight = true; break;
+        case 'Space': moveUp = true; break;
+        case 'ShiftLeft': moveDown = true; break;
+    }
 }
 
 function onKeyUp(event) {
-  switch (event.code) {
-    case 'KeyW': moveForward = false; break;
-    case 'KeyS': moveBackward = false; break;
-    case 'KeyA': moveLeft = false; break;
-    case 'KeyD': moveRight = false; break;
-    case 'Space': moveUp = false; break;
-    case 'ShiftLeft': moveDown = false; break;
-  }
+    // Set FPS camera control when key up (stop movement)
+    switch (event.code) {
+        case 'KeyW': moveForward = false; break;
+        case 'KeyS': moveBackward = false; break;
+        case 'KeyA': moveLeft = false; break;
+        case 'KeyD': moveRight = false; break;
+        case 'Space': moveUp = false; break;
+        case 'ShiftLeft': moveDown = false; break;
+    }
 }
 
 function getNewCameraPos(delta){
+    // Update the FPS camera position 
     let newCameraPos = camera.position.clone();
-    // Update camera
-    velocity.set(0, 0, 0);
-    // Update camera orientation
-    camera.rotation.set(pitch, yaw, 0, 'YXZ');
 
+    velocity.set(0, 0, 0);
+    camera.rotation.set(pitch, yaw, 0, 'YXZ');
     direction.set(0, 0, -1).applyEuler(camera.rotation);
+
     const right = new THREE.Vector3().crossVectors(direction, camera.up).normalize();
 
     if (moveForward) velocity.add(direction);
@@ -132,21 +133,21 @@ function getNewCameraPos(delta){
 }
 
 function createCameraPath(){
-    let boundingZones = [
+    // Create the restricted movement areas datas
+    let boundingAreas = [
         [new THREE.Vector2(-3.5, -3), new THREE.Vector2(3, 4)],
         [new THREE.Vector2(-4, 4), new THREE.Vector2(-2, 7)],
     ]
 
-    for (let i = 0; i < boundingZones.length; i++){
-        const bz = boundingZones[i];
-
-        // Add box2
+    for (let i = 0; i < boundingAreas.length; i++){
+        const bz = boundingAreas[i];
+        // Create a Box2 corresponding to the area and add it to areas
         const min = bz[0];
         const max = bz[1];
         let box2 = new THREE.Box2(min, max);
-        zones.push(box2);
+        areasMovement.push(box2);
 
-        // Create helpers
+        // Create visual helper for the area and add it to areasMovementHelper
         const points = [];
         points.push( new THREE.Vector3( min.x, 0.01, min.y ) );
         points.push( new THREE.Vector3( min.x, 0.01, max.y ) );
@@ -156,24 +157,26 @@ function createCameraPath(){
 
         const geometry = new THREE.BufferGeometry().setFromPoints( points );
 
-        const line = new THREE.Line( geometry, zoneOutHelperMat );
+        const line = new THREE.Line( geometry, areaOutHelperMat );
         scene.add( line );
-        zonesHelper.push(line);
+        areasMovementHelper.push(line);
 
-        console.log("zone created")
+        console.log("area created")
     }
 }
 
-function cameraInZone(newCameraPos){
+function cameraInArea(newCameraPos){
+    // Check if the next FPS camera position is in an area that allow movement and set the areas visual helper (in red or green)
+    // Return a boolean to define if the FPS camera is allowed to move or not
     let updateCamera = false;
-    for (let i = 0; i < zones.length; i++){
-        const zoneBox2 = zones[i];
-        const zoneLine = zonesHelper[i];
-        if (zoneBox2.containsPoint(new THREE.Vector2(newCameraPos.x, newCameraPos.z))){
-            zoneLine.material = zoneInHelperMat;
+    for (let i = 0; i < areasMovement.length; i++){
+        const areaBox2 = areasMovement[i];
+        const areaLine = areasMovementHelper[i];
+        if (areaBox2.containsPoint(new THREE.Vector2(newCameraPos.x, newCameraPos.z))){
+            areaLine.material = areaInHelperMat;
             updateCamera = true;
         } else{
-            zoneLine.material = zoneOutHelperMat;
+            areaLine.material = areaOutHelperMat;
         }
     }
     return updateCamera;
@@ -181,6 +184,7 @@ function cameraInZone(newCameraPos){
 
 // --- Light functions ---
 function createSpotlight(position, target){
+    // Create a static spotlight and add it to the scene
     const spotLight = new THREE.SpotLight( 0xffffff, 50 );
     spotLight.position.set( 2.5, 5, 2.5 );
     spotLight.angle = Math.PI / 5;
@@ -200,12 +204,10 @@ function createSpotlight(position, target){
 
     scene.add( spotLight );
     scene.add( spotLight.target );
-
-    const lightHelper = new THREE.SpotLightHelper( spotLight );
-    // scene.add( lightHelper );
 }
 
 function createFlashlight(){
+    // Create the spotlight for the flashlight
     flashlight = new THREE.SpotLight( 0xffffff, 50 );
     flashlight.castShadow = true;
     flashlight.shadow.mapSize.width = 1024;
@@ -218,33 +220,38 @@ function createFlashlight(){
     flashlight.angle = Math.PI/8;
     flashlight.penumbra = 0.3;
 
-    camera.add( flashlight );
-    flashlight.position.set( 0, 0, 1);
-    scene.add( camera );
-    flashlight.target = camera;
-    flashlight.target.position.add(new THREE.Vector3(0, 0, 1));
-
+    // Create the spotlight helper for the flashlight
     flashlightHelper = new THREE.SpotLightHelper( flashlight );
     flashlightHelper.visible = false;
     scene.add( flashlightHelper );
 }
 
+function linkFlashlightToModel(){
+    // Add spotlight to flashlight model
+    flashlightModel.add( flashlight );
+    flashlight.position.set(-0.25, 0, 0);
+
+    // Create and add the spotlight targer
+    const flashlightTarget = new THREE.Object3D();
+    flashlightModel.add(flashlightTarget);
+    flashlightTarget.position.set(-100, 0, 0);
+    flashlight.target = flashlightTarget;
+
+    // Add the flashlight model to the camera and set position/rotation
+    camera.add( flashlightModel );
+    flashlightModel.position.set( 0.5, -0.2, -0.5);
+
+    flashlightModel.setRotationFromEuler(new THREE.Euler(0, -90*Math.PI/180, 0));
+}
+
 function loadScene(gltfName){
-    const progressBarContainer = document.querySelector('.progress-bar-container');
-    const progressBar = document.getElementById('progress-bar');
-
-    const loader = new GLTFLoader(loadingManager);
-
+    // Load a GLTF as the main scene
     if (gltfModel != null){
         gltfModel.removeFromParent();
         gltfModel = null;
     }
 
-    gltfIsLoading = true;
-    progressBar.value = 0;
-    progressBarContainer.style.visibility = 'visible';
-
-    loader.load( gltfName, async function ( gltf ) {
+    gltfLoader.load( gltfName, function ( gltf ) {
         gltfModel = gltf.scene
         gltfModel.traverse ( function ( child )
         {
@@ -256,12 +263,30 @@ function loadScene(gltfName){
             }
         });
 
-        await renderer.compileAsync( gltfModel, camera, scene );
-
         scene.add( gltfModel );
 
-        gltfIsLoading = false;
-        progressBarContainer.style.visibility = 'hidden';
+    }, undefined, function ( error ) {
+        console.error( error );
+    });
+}
+
+function loadFlashlight(){
+    // Load the flashlight GLTF model
+    gltfLoader.load( "flashlight/flashlight.gltf", function ( gltf ) {
+        flashlightModel = gltf.scene
+        flashlightModel.traverse ( function ( child )
+        {
+            if ( child.isMesh )
+            {
+                child.castShadow = true;
+                child.receiveShadow = true;
+                child.material.side = 0;
+            }
+        });
+
+        scene.add( flashlightModel );
+
+        linkFlashlightToModel();
 
     }, undefined, function ( error ) {
         console.error( error );
@@ -271,12 +296,13 @@ function loadScene(gltfName){
 function init() {
     const container = document.getElementById( 'container' );
 
+    // Params used for GUI
     const params = {
         flashlightActive : true,
         flashlightHelperActive: false,
         exposure: 1.0,
         modelName : "Garage",
-        useZones: false
+        useAreas: false
     }
 
     // --- Renderer ---
@@ -304,33 +330,7 @@ function init() {
     // --- Camera ---
     camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
     camera.position.set(1, 1, 1);
-
-    // -- Loader manager--
-    const progressBar = document.getElementById('progress-bar');
-    loadingManager.onProgress = function (url, loaded, total) {
-        progressBar.value = (loaded / total) * 100;
-    };
-
-    // -- HDR --
-    const rgbeLoader = new HDRLoader(loadingManager);
-    rgbeLoader.setPath('./probes/');
-    rgbeLoader.load('garage_blender.hdr', function (texture, textureData) {
-        texture.mapping = THREE.EquirectangularReflectionMapping;
-        // Apply it both as environment and background
-        scene.environment = texture;
-        scene.background = new THREE.Color(0x0000);
-    });
-
-    console.log('HDR loaded!');
-
-    // -- GLTF --
-    loadScene('garage/garage.gltf');
-
-    // -- init mouse / keyboard controls --
-    initMouseAndKeyboardForFPSCamera(container);
-
-    // --- Camera zone ---
-    createCameraPath()
+    scene.add( camera );
 
     // --- Light ---
     const posA = new THREE.Vector3(1, 4.3, -1.8)
@@ -341,7 +341,51 @@ function init() {
     pointLight1.position.set( 0, 0.1, 2 );
     scene.add( pointLight1 );
 
-    createFlashlight()
+    createFlashlight();
+
+    // -- Loader manager with progress bar --
+    const progressBar = document.getElementById('progress-bar');
+    const progressBarContainer = document.querySelector('.progress-bar-container');
+
+    loadingManager.onStart = function (url, itemsLoaded, total) {
+        console.log('Loading process has started!');
+        const progressBarContainer = document.querySelector('.progress-bar-container');
+        const progressBar = document.getElementById('progress-bar');
+        gltfIsLoading = true;
+        progressBar.value = 0;
+        progressBarContainer.style.visibility = 'visible';
+    };
+
+    loadingManager.onProgress = function (url, loaded, total) {
+        progressBar.value = (loaded / total) * 100;
+    };
+
+    loadingManager.onLoad = async function () {
+        await renderer.compileAsync( gltfModel, camera, scene );
+        console.log('Loading process has been completed!');
+        gltfIsLoading = false;
+        progressBarContainer.style.visibility = 'hidden';
+    };
+
+    // -- Load HDR and scene --
+    rgbeLoader = new HDRLoader(loadingManager);
+    rgbeLoader.setPath('./probes/');
+    rgbeLoader.load('garage_blender.hdr', function (texture, textureData) {
+        texture.mapping = THREE.EquirectangularReflectionMapping;
+        // Apply it both as environment and background
+        scene.environment = texture;
+        scene.background = new THREE.Color(0x0000);
+        console.log('HDR loaded!');
+
+        loadScene('garage/garage.gltf');
+        loadFlashlight();
+    });
+
+    // -- Init mouse / keyboard controls --
+    initMouseAndKeyboardForFPSCamera(container);
+
+    // --- FPS Camera areas movement ---
+    createCameraPath()
 
     // --- Post Process ---
     const renderPass = new RenderPass(scene, camera);
@@ -439,15 +483,17 @@ function init() {
 
     const sceneFolder = gui.addFolder('Scene');
     sceneFolder.add(params, 'modelName', ["Garage", "Basement"]).onChange( function ( value ) {
-        console.log(value);
-        if (value == "Garage"){
-            loadScene('./garage/garage.gltf');
-        } else if(value == "Basement"){
-            loadScene('./basement/basement.gltf');
+        if (!gltfIsLoading){
+            console.log(value);
+            if (value == "Garage"){
+                loadScene('./garage/garage.gltf');
+            } else if(value == "Basement"){
+                loadScene('./basement/basement.gltf');
+            }
         }
     } );
-    sceneFolder.add(params, 'useZones').onChange( function (){
-        useZones = params.useZones;
+    sceneFolder.add(params, 'useAreas').onChange( function (){
+        useAreas = params.useAreas;
     });
 
 }
@@ -463,18 +509,18 @@ function initCloseBtn() {
 }
 
 function onDocumentMouseDown(event) {
-    if (event.target == closeEl) return; // it should deliver click to close button
+    if (event.target == closeEl) return;
 }
 
 function render() {
     const delta = clock.getDelta();
 
     let newCameraPos = getNewCameraPos(delta);
-    if (!useZones || (useZones && cameraInZone(newCameraPos))){
+    if (!useAreas || (useAreas && cameraInArea(newCameraPos))){
         camera.position.set(newCameraPos.x, newCameraPos.y, newCameraPos.z);
     }
     
-    flashlightHelper.update(delta)
+    flashlightHelper.update(delta);
 
     stats.update();
 
