@@ -194,7 +194,6 @@ function createSpotlight(position, target){
     spotLight.shadow.camera.near = 1;
     spotLight.shadow.camera.far = 10;
     spotLight.shadow.focus = 1;
-    // spotLight.shadow.bias = 1;
 
     spotLight.target.position.set(target.x, target.y, target.z)
     spotLight.position.set(position.x, position.y, position.z)
@@ -213,7 +212,7 @@ function createFlashlight(){
     flashlight.shadow.mapSize.height = 1024;
     flashlight.shadow.camera.near = 0.1;
     flashlight.shadow.camera.far = 20;
-    // flashlight.shadow.bias = 1;
+
     flashlight.distance = 40;
     flashlight.decay = 1.15;
     flashlight.angle = Math.PI/8;
@@ -238,7 +237,6 @@ function loadScene(gltfName){
 
     if (gltfModel != null){
         gltfModel.removeFromParent();
-        // scene.remove(gltfModel);
         gltfModel = null;
     }
 
@@ -286,7 +284,6 @@ function init() {
     renderer.physicallyCorrectLights = true;     // PBR enabled
     renderer.outputEncoding = THREE.sRGBEncoding; // PBR RGB workflow
     
-    // renderer.setPixelRatio( window.devicePixelRatio );
     renderer.setSize( window.innerWidth, window.innerHeight );
 
     renderer.shadowMap.enabled = true;
@@ -472,12 +469,10 @@ function onDocumentMouseDown(event) {
 function render() {
     const delta = clock.getDelta();
 
-    // if (!gltfIsLoading){
     let newCameraPos = getNewCameraPos(delta);
     if (!useZones || (useZones && cameraInZone(newCameraPos))){
         camera.position.set(newCameraPos.x, newCameraPos.y, newCameraPos.z);
     }
-    // }
     
     flashlightHelper.update(delta)
 
