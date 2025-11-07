@@ -26,7 +26,6 @@
     "version": "1.0.0",
     "main": "index.html",
     "window": {
-        // "icon": "your_path_to_png_picture",
         "frame": true,
         "width": 1920,
         "height": 1080,
@@ -35,6 +34,8 @@
         }
     }
   ```
+    You can define an icon by adding ```"icon": "path_to_your_picture.png"``` in the "window" part.
+
 - Add the **"package.nw"** folder in the unzip **NW.js project**, next to the *nw.exe*
 - Start the *nw.exe*
 
