@@ -2,6 +2,18 @@
 
  https://kipixelle.github.io/ThreeJS-FPS-Demo/
 
+# App controls
+
+Press "Mouse left click" to get camera control.  
+Press "Escape" to get the mouse cursor control.  
+Use "W,A,S,D" / "Z,Q,S,D" to move the FPS Camera, "Space" to move up, "Shift" to move down.
+
+GUI options :  
+- Post process settings can be changed in the "SSAO", "SAO", "Bloom", "Tone mapping" menus.  
+- "Flashlight" menu allow to active/deactive the flashlight and its helper.  
+- "Scene" menu allow to change the main scene with the "modelName" dropdown.  
+The "useAreas" option allows to active movement constraints for the FPS camera. If it's enabled, the FPS camera can move only in the square areas (visible on the ground). If the FPS camera is inside a zone, its boundaries will be green, otherwise they will turn red. The areas were created to match the "Garage" scene. If you enable this option with the FPS camera outside of every area, it will be blocked (disable the option and place the FPS camera inside an area).
+
 
 # Run the app locally
 

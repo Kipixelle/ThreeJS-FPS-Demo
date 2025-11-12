@@ -496,6 +496,7 @@ function init() {
         useAreas = params.useAreas;
     });
 
+    window.addEventListener('resize', onWindowResize);
 }
 
 function initCloseBtn() {
@@ -510,6 +511,13 @@ function initCloseBtn() {
 
 function onDocumentMouseDown(event) {
     if (event.target == closeEl) return;
+}
+
+function onWindowResize(){
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    composer.setSize(window.innerWidth, window.innerHeight);
 }
 
 function render() {
