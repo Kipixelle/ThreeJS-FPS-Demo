@@ -38,6 +38,20 @@ let moveRight = false;    // Key D
 let moveUp = false;       // Key Space
 let moveDown = false;     // Key Shift
 
+const isTouchDevice = typeof window !== 'undefined' && (
+    'ontouchstart' in window ||
+    (typeof navigator !== 'undefined' && (navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0))
+);
+
+let touchControlsEnabled = false; // Track if touch controls are currently active
+let touchListenersBound = false;  // Track if touch listeners were registered once
+// let touchInputTarget = null;      // DOM element receiving touch interactions
+// let touchMoveTouchId = null;      // Identifier for movement touch
+let touchLookTouchId = null;      // Identifier for look touch
+// const touchMoveOrigin = { x: 0, y: 0 };    // Start position of joystick touch
+const touchLookPrevious = { x: 0, y: 0 };  // Previous position of look touch
+// const TOUCH_MOVE_THRESHOLD = 24;           // Dead zone (px) to avoid jitter for touch movement
+
 const velocity = new THREE.Vector3();  // FPS camera velocity
 const direction = new THREE.Vector3(); // FPS camera direction
 
@@ -72,9 +86,7 @@ function initMouseAndKeyboardForFPSCamera(container){
     // Mouse look
     document.body.addEventListener('mousemove', (event) => {
         if (document.pointerLockElement === document.body && !gltfIsLoading){
-            yaw -= event.movementX * sensitivity;
-            pitch -= event.movementY * sensitivity;
-            pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+            applyLookDelta(event.movementX, event.movementY);
         }
     });
 
@@ -106,6 +118,111 @@ function onKeyUp(event) {
         case 'ShiftLeft': moveDown = false; break;
     }
 }
+
+function applyLookDelta(deltaX, deltaY){
+    // Shared look logic for mouse and touch inputs
+    yaw -= deltaX * sensitivity;
+    pitch -= deltaY * sensitivity;
+    pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+}
+
+function setupTouchControls(target){
+    // Register touch listeners once and keep the reference of the target element
+    // if (!target) return;
+    // touchInputTarget = target;
+    if (touchListenersBound) return;
+
+    const listenerOpts = { passive: false };
+    target.addEventListener('touchstart', handleTouchStart, listenerOpts);
+    target.addEventListener('touchmove', handleTouchMove, listenerOpts);
+    target.addEventListener('touchend', handleTouchEnd, listenerOpts);
+    target.addEventListener('touchcancel', handleTouchEnd, listenerOpts);
+    touchListenersBound = true;
+}
+
+function setTouchControlsEnabled(enabled){
+    // Enable or disable touch controls without removing listeners
+    touchControlsEnabled = enabled; //!!enabled;
+    if (!touchControlsEnabled){
+        // releaseTouchMovement();
+        // touchMoveTouchId = null;
+        touchLookTouchId = null;
+    }
+}
+
+function handleTouchStart(event){
+    if (!touchControlsEnabled) return;
+    let handled = false;
+
+    for (const touch of event.changedTouches){
+        const isMoveTouch = touch.clientX < 0.0;
+
+        // if (isMoveTouch && touchMoveTouchId === null){
+        //     touchMoveTouchId = touch.identifier;
+        //     touchMoveOrigin.x = touch.clientX;
+        //     touchMoveOrigin.y = touch.clientY;
+        //     handled = true;
+        // } else 
+        if (!isMoveTouch && touchLookTouchId === null){
+            touchLookTouchId = touch.identifier;
+            touchLookPrevious.x = touch.clientX;
+            touchLookPrevious.y = touch.clientY;
+            handled = true;
+        }
+    }
+
+    if (handled){
+        event.preventDefault();
+    }
+}
+
+function handleTouchMove(event){
+    if (!touchControlsEnabled) return;
+    let handled = false;
+
+    for (const touch of event.changedTouches){
+		if (touch.identifier === touchLookTouchId){
+            const deltaX = touch.clientX - touchLookPrevious.x;
+            const deltaY = touch.clientY - touchLookPrevious.y;
+            touchLookPrevious.x = touch.clientX;
+            touchLookPrevious.y = touch.clientY;
+            applyLookDelta(deltaX, deltaY);
+            handled = true;
+        }
+    }
+
+    if (handled){
+        event.preventDefault();
+    }
+}
+
+function handleTouchEnd(event){
+    if (!touchControlsEnabled) return;
+    let handled = false;
+
+    for (const touch of event.changedTouches){
+        // if (touch.identifier === touchMoveTouchId){
+        //     touchMoveTouchId = null;
+        //     releaseTouchMovement();
+        //     handled = true;
+        // }
+        if (touch.identifier === touchLookTouchId){
+            touchLookTouchId = null;
+            handled = true;
+        }
+    }
+
+    if (handled){
+        event.preventDefault();
+    }
+}
+
+// function releaseTouchMovement(){
+//     moveForward = false;
+//     moveBackward = false;
+//     moveLeft = false;
+//     moveRight = false;
+// }
 
 function getNewCameraPos(delta){
     // Update the FPS camera position 
@@ -302,7 +419,8 @@ function init() {
         flashlightHelperActive: false,
         exposure: 1.0,
         modelName : "Garage",
-        useAreas: false
+        useAreas: false,
+        touchControls: isTouchDevice
     }
 
     // --- Renderer ---
@@ -329,7 +447,7 @@ function init() {
 
     // --- Camera ---
     camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
-    camera.position.set(1, 1, 1);
+    camera.position.set(-2, 1.8, 1);
     scene.add( camera );
 
     // --- Light ---
@@ -383,6 +501,8 @@ function init() {
 
     // -- Init mouse / keyboard controls --
     initMouseAndKeyboardForFPSCamera(container);
+    setupTouchControls(renderer.domElement);
+    setTouchControlsEnabled(params.touchControls);
 
     // --- FPS Camera areas movement ---
     createCameraPath()
@@ -496,6 +616,14 @@ function init() {
         useAreas = params.useAreas;
     });
 
+    const controlsFolder = gui.addFolder('Controls');
+    controlsFolder.add(params, 'touchControls').onChange( function ( value ){
+        setTouchControlsEnabled(value);
+    } );
+    if (isTouchDevice){
+        controlsFolder.open();
+    }
+
     window.addEventListener('resize', onWindowResize);
 }
 
@@ -537,4 +665,3 @@ function render() {
     requestAnimationFrame( render );
     // renderer.render( scene, camera );
 }
-
