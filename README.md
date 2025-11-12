@@ -44,3 +44,8 @@
 - Go download the lastest release
 - Unzip it
 - Start the *nw.exe*
+
+# License
+
+All the content in this project is licensed under the MIT License.
+All the content in the "public" repository is released under the Creative Commons license (CC BY-NC-SA 4.0).
