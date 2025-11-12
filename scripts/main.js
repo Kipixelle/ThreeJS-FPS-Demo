@@ -44,7 +44,6 @@ const isTouchDevice = typeof window !== 'undefined' && (
 );
 
 let touchControlsEnabled = false; // Boolean to define if touch controls are currently active
-// let touchListenersBound = false;  // Boolean to define if touch listeners were registered once
 let touchLookTouchId = null;      // Identifier for look touch
 const touchLookPrevious = { x: 0, y: 0 };  // Previous position of look touch
 
@@ -120,14 +119,11 @@ function onKeyUp(event) {
 // -- Touch for mobile
 function initTouchControls(target){
     // Register touch listeners once
-    // if (touchListenersBound) return;
-
     const listenerOpts = { passive: false };
     target.addEventListener('touchstart', handleTouchStart, listenerOpts);
     target.addEventListener('touchmove', handleTouchMove, listenerOpts);
     target.addEventListener('touchend', handleTouchEnd, listenerOpts);
     target.addEventListener('touchcancel', handleTouchEnd, listenerOpts);
-    // touchListenersBound = true;
 }
 
 function handleTouchStart(event){
@@ -600,8 +596,8 @@ function init() {
     controlsFolder.add(params, 'touchControls').onChange( function ( value ){
         setTouchControlsEnabled(value);
     } );
-    if (isTouchDevice){
-        controlsFolder.open();
+    if (!isTouchDevice){
+        controlsFolder.close();
     }
 
     window.addEventListener('resize', onWindowResize);
