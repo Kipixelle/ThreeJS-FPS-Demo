@@ -43,21 +43,17 @@ const isTouchDevice = typeof window !== 'undefined' && (
     (typeof navigator !== 'undefined' && (navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0))
 );
 
-let touchControlsEnabled = false; // Track if touch controls are currently active
-let touchListenersBound = false;  // Track if touch listeners were registered once
-// let touchInputTarget = null;      // DOM element receiving touch interactions
-// let touchMoveTouchId = null;      // Identifier for movement touch
+let touchControlsEnabled = false; // Boolean to define if touch controls are currently active
+// let touchListenersBound = false;  // Boolean to define if touch listeners were registered once
 let touchLookTouchId = null;      // Identifier for look touch
-// const touchMoveOrigin = { x: 0, y: 0 };    // Start position of joystick touch
 const touchLookPrevious = { x: 0, y: 0 };  // Previous position of look touch
-// const TOUCH_MOVE_THRESHOLD = 24;           // Dead zone (px) to avoid jitter for touch movement
 
 const velocity = new THREE.Vector3();  // FPS camera velocity
 const direction = new THREE.Vector3(); // FPS camera direction
 
 let pitch = 0;              // FPS camera pitch
 let yaw = 0;                // FPS camera yaw
-const sensitivity = 0.002;  // FPS camera sensitivity
+let sensitivity = 0.002;  // FPS camera sensitivity
 const speed = 6.0;          // FPS camera speed
 
 // -- Mouse and control --
@@ -67,7 +63,7 @@ document.addEventListener( 'mousedown', onDocumentMouseDown, false ); // Functio
 let clock = new THREE.Clock();
 
 // -- Areas movement system --
-let useAreas = false; // Bolean to define if use areas constraint to move the FPS camera
+let useAreas = false; // Boolean to define if use areas constraint to move the FPS camera
 let areasMovement = [];       // Array to store the THREE.Box2 representing areas restricting movement for FPS camera
 let areasMovementHelper = []; // Array to store the THREE.Line to display helpers for areas
 const areaInHelperMat = new THREE.LineBasicMaterial({color: 0x32a852});  // Color of area helper when camera in (green)
@@ -77,9 +73,11 @@ init();   // Init the app
 render(); // Render the app
 
 // --- Camera FPS functions ---
-function initMouseAndKeyboardForFPSCamera(container){
+
+// -- Keyboard and mouse
+function initMouseAndKeyboardForFPSCamera(target){
     // Mouse lock
-    container.addEventListener('mousedown', () => {
+    target.addEventListener('mousedown', () => {
         document.body.requestPointerLock();
     });
 
@@ -119,35 +117,17 @@ function onKeyUp(event) {
     }
 }
 
-function applyLookDelta(deltaX, deltaY){
-    // Shared look logic for mouse and touch inputs
-    yaw -= deltaX * sensitivity;
-    pitch -= deltaY * sensitivity;
-    pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
-}
-
-function setupTouchControls(target){
-    // Register touch listeners once and keep the reference of the target element
-    // if (!target) return;
-    // touchInputTarget = target;
-    if (touchListenersBound) return;
+// -- Touch for mobile
+function initTouchControls(target){
+    // Register touch listeners once
+    // if (touchListenersBound) return;
 
     const listenerOpts = { passive: false };
     target.addEventListener('touchstart', handleTouchStart, listenerOpts);
     target.addEventListener('touchmove', handleTouchMove, listenerOpts);
     target.addEventListener('touchend', handleTouchEnd, listenerOpts);
     target.addEventListener('touchcancel', handleTouchEnd, listenerOpts);
-    touchListenersBound = true;
-}
-
-function setTouchControlsEnabled(enabled){
-    // Enable or disable touch controls without removing listeners
-    touchControlsEnabled = enabled; //!!enabled;
-    if (!touchControlsEnabled){
-        // releaseTouchMovement();
-        // touchMoveTouchId = null;
-        touchLookTouchId = null;
-    }
+    // touchListenersBound = true;
 }
 
 function handleTouchStart(event){
@@ -157,12 +137,6 @@ function handleTouchStart(event){
     for (const touch of event.changedTouches){
         const isMoveTouch = touch.clientX < 0.0;
 
-        // if (isMoveTouch && touchMoveTouchId === null){
-        //     touchMoveTouchId = touch.identifier;
-        //     touchMoveOrigin.x = touch.clientX;
-        //     touchMoveOrigin.y = touch.clientY;
-        //     handled = true;
-        // } else 
         if (!isMoveTouch && touchLookTouchId === null){
             touchLookTouchId = touch.identifier;
             touchLookPrevious.x = touch.clientX;
@@ -201,11 +175,6 @@ function handleTouchEnd(event){
     let handled = false;
 
     for (const touch of event.changedTouches){
-        // if (touch.identifier === touchMoveTouchId){
-        //     touchMoveTouchId = null;
-        //     releaseTouchMovement();
-        //     handled = true;
-        // }
         if (touch.identifier === touchLookTouchId){
             touchLookTouchId = null;
             handled = true;
@@ -217,12 +186,23 @@ function handleTouchEnd(event){
     }
 }
 
-// function releaseTouchMovement(){
-//     moveForward = false;
-//     moveBackward = false;
-//     moveLeft = false;
-//     moveRight = false;
-// }
+function applyLookDelta(deltaX, deltaY){
+    // Shared look logic for mouse and touch inputs
+    yaw -= deltaX * sensitivity;
+    pitch -= deltaY * sensitivity;
+    pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+}
+
+function setTouchControlsEnabled(enabled){
+    // Set touch control for mobile and sensitivity 
+    touchControlsEnabled = enabled;
+    if (!touchControlsEnabled){
+        sensitivity = 0.002;
+        touchLookTouchId = null;
+    } else {
+        sensitivity = 0.005;
+    }
+}
 
 function getNewCameraPos(delta){
     // Update the FPS camera position 
@@ -501,7 +481,7 @@ function init() {
 
     // -- Init mouse / keyboard controls --
     initMouseAndKeyboardForFPSCamera(container);
-    setupTouchControls(renderer.domElement);
+    initTouchControls(renderer.domElement);
     setTouchControlsEnabled(params.touchControls);
 
     // --- FPS Camera areas movement ---
